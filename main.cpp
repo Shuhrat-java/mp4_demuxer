@@ -18,12 +18,12 @@ int writer(void *opaque, uint8_t *buffer, int size);
 
 int64_t seeker(void *opaque, int64_t offset, int whence);
 
-const char *file_name = "/path_to_your_project/this_v.mp4";
+const char *muxed = "/path_to/muxed.mp4";
 
-//const char *muxed = "/home/prodvd/Videos/muxed.mp4";
+const char *audiofile = "/path/this.aac";
 
-const char *audiofile = "/path_to_your_project/this.aac";
-const char *videofile = "/path_to_your_project/this.h264";
+const char *videofile = "/path/this.h264";
+const char *file_name = "/path/this_v.mp4";
 int64_t frame_index;
 
 int main() {
