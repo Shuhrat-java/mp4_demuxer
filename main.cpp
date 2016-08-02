@@ -18,13 +18,12 @@ int writer(void *opaque, uint8_t *buffer, int size);
 
 int64_t seeker(void *opaque, int64_t offset, int whence);
 
-//const char *file_name = "/home/prodvd/Videos/GoogleDriveTestVideo/nextW10.mp4";
-const char *file_name = "/home/prodvd/Videos/GoogleDriveTestVideo/this_v.mp4";
+const char *file_name = "/path_to_your_project/this_v.mp4";
 
-const char *muxed = "/home/prodvd/Videos/muxed.mp4";
+//const char *muxed = "/home/prodvd/Videos/muxed.mp4";
 
-const char *audiofile = "/home/prodvd/Videos/GoogleDriveTestVideo/this.aac";
-const char *videofile = "/home/prodvd/Videos/GoogleDriveTestVideo/this.h264";
+const char *audiofile = "/path_to_your_project/this.aac";
+const char *videofile = "/path_to_your_project/this.h264";
 int64_t frame_index;
 
 int main() {
