@@ -14,6 +14,8 @@ void mux_();
 
 void mux2();
 
+void read_from_file();
+int reader(void *opaque, uint8_t *buffer, int size);
 int writer(void *opaque, uint8_t *buffer, int size);
 
 int64_t seeker(void *opaque, int64_t offset, int whence);
@@ -24,10 +26,14 @@ const char *audiofile = "/path/this.aac";
 
 const char *videofile = "/path/this.h264";
 const char *file_name = "/path/this_v.mp4";
+
+const char *file_nam = "/path.../test.mp4";
+const char *ofilename = "/path.../test.ts";
+
 int64_t frame_index;
 
 int main() {
-    demux3();
+    read_from_file();
     return 0;
 }
 
@@ -194,24 +200,6 @@ void mux_() {
 
     av_write_trailer(main_context);
 
-}
-
-int writer(void *opaque, uint8_t *buffer, int size) {
-
-    FILE *fx = (FILE *) opaque;
-    if (fx) {
-        return fwrite(buffer, 1, size, fx);
-    }
-    return -1;
-}
-
-int64_t seeker(void *opaque, int64_t offset, int whence) {
-
-    FILE *f = (FILE *) opaque;
-    if (f) {
-
-        return fseek(f, offset, whence);
-    }
 }
 
 void printError(int err_code) {
@@ -636,4 +624,216 @@ void mux2() {
         return;
     }
 
+}
+
+void read_from_file() {
+
+    av_register_all();
+
+//    fv = fopen("/home/prodvd/Videos/onlyvideo.h264", "w");
+//
+//    fa = fopen("/home/prodvd/Videos/onlyaudio.aac", "w");
+
+    AVFormatContext *ifmt_ctx = nullptr;
+    AVFormatContext *ofmt_ctx = nullptr;
+
+    int err_code = avformat_open_input(&ifmt_ctx, file_nam, nullptr, nullptr);
+
+    if (err_code != 0) {
+
+        char err[255];
+
+        av_strerror(err_code, err, 255);
+
+        printf("\nError: %s", err);
+
+        return;
+    }
+
+    //av_dump_format(ifmt_ctx, 0, nullptr, 0);
+
+    err_code = avformat_find_stream_info(ifmt_ctx, nullptr);
+    if (err_code < 0) {
+
+        char err[255];
+
+        av_strerror(err_code, err, 255);
+
+        printf("\nError: %s", err);
+
+        return;
+    }
+
+    int video_stream = -1, audio_stream = -1;
+
+    for (int i = 0; i < ifmt_ctx->nb_streams; ++i) {
+        if (ifmt_ctx->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
+            video_stream = i;
+            printf("\nVideo stream index:%d", video_stream);
+            break;
+        }
+    }
+
+    for (int i = 0; i < ifmt_ctx->nb_streams; ++i) {
+        if (ifmt_ctx->streams[i]->codec->codec_type == AVMEDIA_TYPE_AUDIO) {
+            audio_stream = i;
+            printf("\nAudio stream index:%d", audio_stream);
+            break;
+        }
+    }
+
+    //  If all ok
+    if (video_stream >= 0 && audio_stream >= 0) {
+        //  Allocate output mpegts container
+        err_code = avformat_alloc_output_context2(&ofmt_ctx, nullptr, "mpegts", ofilename);
+        if (err_code != 0) {
+            return;
+        }
+        FILE *fx = fopen(ofilename, "w");
+        int size = 1880;
+        uint8_t *buffer = (uint8_t *) av_malloc(size);
+
+        //  Set custion output
+        ofmt_ctx->pb = avio_alloc_context(buffer, size, 1, fx, nullptr, writer, seeker);
+
+
+        // Add streams
+        AVStream *ovstream = avformat_new_stream(ofmt_ctx, nullptr);
+        AVStream *oastream = avformat_new_stream(ofmt_ctx, nullptr);
+
+        //  Get input stream pointers
+        AVStream *ivstream = ifmt_ctx->streams[video_stream];
+        AVStream *iastream = ifmt_ctx->streams[audio_stream];
+
+        //  Configure output video stream and codec
+        avcodec_copy_context(ovstream->codec, ivstream->codec);
+        avcodec_copy_context(oastream->codec, iastream->codec);
+
+
+        //  Write header
+        err_code = avformat_write_header(ofmt_ctx, nullptr);
+        if (err_code != 0)
+            return;
+
+        AVPacket packet;
+
+        av_init_packet(&packet);
+
+        AVBitStreamFilterContext * bsfc = av_bitstream_filter_init("h264_mp4toannexb");
+        if(bsfc == nullptr )
+            printf("Bit stream filter could not be found\n");
+
+        //  Write data
+        while (av_read_frame(ifmt_ctx, &packet) >= 0) {
+
+            AVPacket newPkt = packet;
+            if(bsfc && packet.stream_index == ivstream->index)
+            {
+                err_code = av_bitstream_filter_filter(bsfc, ovstream->codec, nullptr, &newPkt.data, &newPkt.size, packet.data, packet.size, packet.flags & AV_PKT_FLAG_KEY);
+            }
+            av_write_frame(ofmt_ctx, &newPkt);
+            av_free_packet(&packet);
+        }
+
+        //  Write trailer
+        av_write_trailer(ofmt_ctx);
+    }
+
+
+//    av_dump_format(ifmt_ctx, 0, nullptr, 0);
+
+    avformat_close_input(&ifmt_ctx);
+}
+
+void read_customio() {
+
+    FILE *opaque = fopen(file_name, "r");
+
+    av_register_all();
+
+    AVFormatContext *ifmt_ctx = avformat_alloc_context();
+
+    int buffer_size = 2048;
+
+    uint8_t *buffer = (uint8_t *) av_malloc(buffer_size);
+
+    ifmt_ctx->pb = avio_alloc_context(buffer, buffer_size, 0, opaque, reader, nullptr, seeker);
+
+    int err_code = avformat_open_input(&ifmt_ctx, nullptr, nullptr, nullptr);
+
+    if (err_code != 0) {
+
+        char err[255];
+
+        av_strerror(err_code, err, 255);
+
+        printf("\nError: %s", err);
+
+        return;
+    }
+
+    av_dump_format(ifmt_ctx, 0, nullptr, 0);
+
+    err_code = avformat_find_stream_info(ifmt_ctx, nullptr);
+
+    if (err_code < 0) {
+
+        char err[255];
+
+        av_strerror(err_code, err, 255);
+
+        printf("\nError: %s", err);
+
+        return;
+    }
+
+    av_dump_format(ifmt_ctx, 0, nullptr, 0);
+
+    avformat_close_input(&ifmt_ctx);
+
+}
+
+int reader(void *opaque, uint8_t *buffer, int size) {
+
+    FILE *fx = (FILE *) opaque;
+
+    int read = fread(buffer, 1, size, fx);
+
+    return read;
+
+}
+
+int64_t seeker(void *opaque, int64_t offset, int whence) {
+
+    FILE *fx = (FILE *) opaque;
+
+    printf("\nSeeking   offset:%lld  whence:%d", offset, whence);
+
+    if (whence == 0x10000) {
+
+        size_t cur_pos = ftell(fx);
+
+        fseek(fx, 0, SEEK_END);
+
+        uint64_t file_size = ftell(fx);
+
+        fseek(fx, cur_pos, SEEK_SET);
+
+        return file_size;
+    }
+    int64_t seek = fseek(fx, offset, whence);
+
+    return seek;
+
+}
+
+int writer(void *opaque, uint8_t *buffer, int size) {
+
+    FILE *fx = (FILE *) opaque;
+    printf("\nWriting:%d", size);
+    if (fx) {
+
+        return fwrite(buffer, 1, size, fx);
+    }
+    return -1;
 }
